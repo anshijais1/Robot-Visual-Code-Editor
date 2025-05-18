@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Scratch starter project
 
 To get started:
@@ -9,3 +10,7 @@ To get started:
 # Robot-Lab-Visual-Code-Editor
 Robot-Lab is a visual code editor for programming virtual robots using drag-and-drop blocks. Build logic visually, control robots on a virtual stage, and learn coding fundamentals—ideal for beginners and creative experimentation.
 >>>>>>> 823e5c2cdc4592cc748990647f0e3180727835f5
+=======
+# Robot-Visual-Code-Editor
+Robot-Lab is a visual code editor for programming virtual robots using drag-and-drop blocks. Build logic visually, control robots on a virtual stage, and learn coding fundamentals—ideal for beginners and creative experimentation.
+>>>>>>> d5dc42924c7bb3143213b021866bc624762527d9
