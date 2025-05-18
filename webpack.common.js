@@ -1,6 +1,7 @@
 const path = require("path");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
+const CopyWebpackPlugin = require("copy-webpack-plugin");
 
 module.exports = {
   entry: {
@@ -8,8 +9,8 @@ module.exports = {
   },
   output: {
     filename: "app.js",
-    path: path.resolve(__dirname, "dist"),  // dist folder me output
-    clean: true,  // purana build clear kare
+    path: path.resolve(__dirname, "dist"),
+    clean: true,
   },
   module: {
     rules: [
@@ -22,14 +23,7 @@ module.exports = {
             loader: "postcss-loader",
             options: {
               postcssOptions: {
-                plugins: [
-                  [
-                    "postcss-preset-env",
-                    {
-                      // Options
-                    },
-                  ],
-                ],
+                plugins: [["postcss-preset-env"]],
               },
             },
           },
@@ -50,8 +44,13 @@ module.exports = {
   plugins: [
     new MiniCssExtractPlugin(),
     new HtmlWebpackPlugin({
-      template: "./src/index.html", // aapka HTML template yahan hona chahiye
+      template: "./src/index.html",
       filename: "index.html",
+    }),
+    new CopyWebpackPlugin({
+      patterns: [
+        { from: "public", to: "." }, // Copy files from public directly to dist/
+      ],
     }),
   ],
 };
