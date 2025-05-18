@@ -2,12 +2,13 @@
   "name": "scratch-starter-project",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "start": "webpack serve --config webpack.dev.js",
-    "build": "webpack --config webpack.prod.js"
-  },
+"scripts": {
+  "start": "webpack serve --config webpack.dev.js",
+  "build": "webpack --config webpack.prod.js"
+}
+,
   "dependencies": {
-    "@remix-run/dev": "^2.16.6",
+    "isbot": "^4",
     "react": "^18.3.1",
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
