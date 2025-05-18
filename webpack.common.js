@@ -1,13 +1,15 @@
 const path = require("path");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const HtmlWebpackPlugin = require("html-webpack-plugin");
 
 module.exports = {
   entry: {
     app: "./src/index.js",
   },
   output: {
-    // filename: "app.js",
-    path: path.resolve(__dirname, "public"),
+    filename: "app.js",
+    path: path.resolve(__dirname, "dist"),  // dist folder me output
+    clean: true,  // purana build clear kare
   },
   module: {
     rules: [
@@ -45,5 +47,11 @@ module.exports = {
       },
     ],
   },
-  plugins: [new MiniCssExtractPlugin()],
+  plugins: [
+    new MiniCssExtractPlugin(),
+    new HtmlWebpackPlugin({
+      template: "./src/index.html", // aapka HTML template yahan hona chahiye
+      filename: "index.html",
+    }),
+  ],
 };
