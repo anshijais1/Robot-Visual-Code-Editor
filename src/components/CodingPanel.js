@@ -35,88 +35,12 @@ const ALL_PALETTE_BLOCKS = [
   ...BLOCK_CATEGORIES.flatMap(cat => cat.blocks)
 ];
 
-const OPERATOR_BLOCKS = [
-  "add", "subtract", "multiply", "divide", "pick_random",
-  "greater_than", "less_than", "equals", "and", "or", "not", "mod", "round", "abs"
-];
-
-function isOperatorSlot(parentBlock, slot) {
-  return parentBlock && OPERATOR_BLOCKS.includes(parentBlock.type) && (slot === "a" || slot === "b");
-}
-
 function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
 function isEventBlockType(type) {
   return type === "when_stage_clicked" || type === "when_robot_clicked";
-}
-
-// --- DEEP RECURSIVE UPDATE FOR VALUE CHANGES AND MODAL INSERTIONS ---
-function updateBlockTree(node, blockId, field, value, isModal = false) {
-  if (!node) return node;
-
-  if (Array.isArray(node)) {
-    return node.map(child => updateBlockTree(child, blockId, field, value, isModal));
-  }
-
-  if (typeof node === "object" && node._id === blockId) {
-    // For modal select (add block/value)
-    if (isModal) {
-      // For array slots (body/elseBody), allow value or block
-      if (Array.isArray(node[field]) || field === "body" || field === "elseBody") {
-        return {
-          ...node,
-          [field]: [
-            ...(Array.isArray(node[field]) ? node[field] : []),
-            value.type === "value"
-              ? value.value
-              : { ...deepClone(value), _id: Math.random().toString(36).slice(2) + Date.now() }
-          ]
-        };
-      }
-      // For operator block's a/b, allow value or block
-      if (isOperatorSlot(node, field)) {
-        if (value.type === "value") {
-          return { ...node, [field]: value.value };
-        }
-        return { ...node, [field]: { ...deepClone(value), _id: Math.random().toString(36).slice(2) + Date.now() } };
-      }
-      // For If/IfElse (or any non-operator), always insert block object (never primitive)
-      return {
-        ...node,
-        [field]: { ...deepClone(value), _id: Math.random().toString(36).slice(2) + Date.now() }
-      };
-    }
-    // For value change (input), just update the field
-    return { ...node, [field]: value };
-  }
-
-  if (typeof node === "object") {
-    let changed = false;
-    let newNode = { ...node };
-    for (const slot of ["body", "elseBody"]) {
-      if (Array.isArray(node[slot])) {
-        const updated = updateBlockTree(node[slot], blockId, field, value, isModal);
-        if (updated !== node[slot]) {
-          newNode[slot] = updated;
-          changed = true;
-        }
-      }
-    }
-    for (const slot of ["a", "b"]) {
-      if (typeof node[slot] === "object" && node[slot] && node[slot]._id) {
-        const updated = updateBlockTree(node[slot], blockId, field, value, isModal);
-        if (updated !== node[slot]) {
-          newNode[slot] = updated;
-          changed = true;
-        }
-      }
-    }
-    return changed ? newNode : node;
-  }
-
-  return node;
 }
 
 export default function CodingPanel({
@@ -151,6 +75,7 @@ export default function CodingPanel({
     const data = e.dataTransfer.getData("application/json");
     if (data) {
       let block = JSON.parse(data);
+      // Always ensure .body is an array for event blocks
       if (isEventBlockType(block.type)) block.body = [];
       setProgram((prev) => [
         ...prev,
@@ -159,6 +84,7 @@ export default function CodingPanel({
     }
   }
   function handleBlockClick(block) {
+    // Always ensure .body is an array for event blocks
     if (isEventBlockType(block.type)) block.body = [];
     setProgram((prev) => [
       ...prev,
@@ -188,7 +114,31 @@ export default function CodingPanel({
   }
 
   function handleModalSelect(block) {
-    setProgram(program => updateBlockTree(program, addInsideIdx, addInsideType, block, true));
+    setProgram((program) =>
+      program.map((b, i) => {
+        if (i !== addInsideIdx) return b;
+        // Always ensure the slot is an array for event/control blocks (body/elseBody)
+        if (Array.isArray(b[addInsideType]) || addInsideType === "body" || addInsideType === "elseBody") {
+          return {
+            ...b,
+            [addInsideType]: [
+              ...(Array.isArray(b[addInsideType]) ? b[addInsideType] : []),
+              block.type === "value"
+                ? block.value
+                : { ...deepClone(block), _id: Math.random().toString(36).slice(2) + Date.now() },
+            ],
+          };
+        } else { // for operator slots a/b
+          return {
+            ...b,
+            [addInsideType]:
+              block.type === "value"
+                ? block.value
+                : { ...deepClone(block), _id: Math.random().toString(36).slice(2) + Date.now() },
+          };
+        }
+      })
+    );
     setAddInsideIdx(null);
     setAddInsideType("");
   }
@@ -198,82 +148,14 @@ export default function CodingPanel({
     setAddInsideType("");
   }
 
-  function handleBlockValueChange(blockId, field, val) {
-    setProgram(program => updateBlockTree(program, blockId, field, val, false));
+  function handleBlockValueChange(idx, field, val) {
+    setProgram((program) =>
+      program.map((b, i) => (i === idx ? { ...b, [field]: val } : b))
+    );
   }
 
   function isEventBlock(block) {
     return isEventBlockType(block.type);
-  }
-
-  function renderIfElseSlot(slotValue, block, idx, slotName) {
-    if (slotValue !== undefined && slotValue !== null) {
-      if (typeof slotValue === "object") {
-        return (
-          <span
-            onClick={() =>
-              handleAddInside(idx, slotName)
-            }
-            style={{
-              cursor: "pointer",
-              marginLeft: 2,
-              marginRight: 4,
-            }}
-          >
-            {renderBlock(
-              slotValue,
-              0,
-              idx,
-              slotName
-            )}
-          </span>
-        );
-      } else {
-        return (
-          <span style={{ display: "inline-flex", alignItems: "center" }}>
-            <span
-              style={{
-                background: "#ffe0e0",
-                borderRadius: 4,
-                padding: "2px 6px",
-                color: "red",
-                marginRight: 4,
-              }}
-            >
-              {slotValue}
-            </span>
-            <button
-              className="add-inside-btn"
-              onClick={() =>
-                handleAddInside(idx, slotName)
-              }
-              style={{
-                marginRight: 4,
-                padding: "0 6px",
-              }}
-            >
-              + {slotName}
-            </button>
-          </span>
-        );
-      }
-    } else {
-      return (
-        <button
-          className="add-inside-btn"
-          onClick={() =>
-            handleAddInside(idx, slotName)
-          }
-          style={{
-            marginLeft: 2,
-            marginRight: 4,
-            padding: "0 6px",
-          }}
-        >
-          + {slotName}
-        </button>
-      );
-    }
   }
 
   function renderBlock(block, idx, parentIdx, parentType) {
@@ -297,9 +179,25 @@ export default function CodingPanel({
     }
 
     const isControlBlock = ["repeat", "forever", "if", "if_else"].includes(block.type);
-    const isOperatorBlock = OPERATOR_BLOCKS.includes(block.type);
+    const isOperatorBlock = [
+      "add",
+      "subtract",
+      "multiply",
+      "divide",
+      "pick_random",
+      "greater_than",
+      "less_than",
+      "equals",
+      "and",
+      "or",
+      "not",
+      "mod",
+      "round",
+      "abs",
+    ].includes(block.type);
     const isIfBlock = block.type === "if" || block.type === "if_else";
 
+    // EVENT BLOCK SUPPORT: add +inside for event blocks and render body children
     if (isEventBlock(block)) {
       return (
         <div
@@ -402,7 +300,7 @@ export default function CodingPanel({
                 max={60}
                 onClick={(e) => e.stopPropagation()}
                 onChange={(e) =>
-                  handleBlockValueChange(block._id, "value", e.target.value)
+                  handleBlockValueChange(idx, "value", e.target.value)
                 }
               />
             )}
@@ -415,7 +313,7 @@ export default function CodingPanel({
                 max={100}
                 onClick={(e) => e.stopPropagation()}
                 onChange={(e) =>
-                  handleBlockValueChange(block._id, "value", e.target.value)
+                  handleBlockValueChange(idx, "value", e.target.value)
                 }
               />
             )}
@@ -443,7 +341,7 @@ export default function CodingPanel({
                   value={block.from === undefined ? "1" : block.from}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) =>
-                    handleBlockValueChange(block._id, "from", e.target.value)
+                    handleBlockValueChange(idx, "from", e.target.value)
                   }
                 />
                 {" to "}
@@ -453,7 +351,7 @@ export default function CodingPanel({
                   value={block.to === undefined ? "10" : block.to}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) =>
-                    handleBlockValueChange(block._id, "to", e.target.value)
+                    handleBlockValueChange(idx, "to", e.target.value)
                   }
                 />
               </span>
@@ -463,71 +361,80 @@ export default function CodingPanel({
                 (
                 <span style={{ marginLeft: 2, marginRight: 2 }}>
                   a:
-                  {renderIfElseSlot(block.a, block, parentIdx == null ? idx : parentIdx, "a")}
+                  {block.a !== undefined && block.a !== null ? (
+                    <span
+                      onClick={() =>
+                        handleAddInside(
+                          parentIdx == null ? idx : parentIdx,
+                          "a"
+                        )
+                      }
+                      style={{
+                        cursor: "pointer",
+                        marginLeft: 2,
+                        marginRight: 4,
+                      }}
+                    >
+                      {renderBlock(
+                        block.a,
+                        0,
+                        parentIdx == null ? idx : parentIdx,
+                        "a"
+                      )}
+                    </span>
+                  ) : (
+                    <button
+                      className="add-inside-btn"
+                      onClick={() =>
+                        handleAddInside(
+                          parentIdx == null ? idx : parentIdx,
+                          "a"
+                        )
+                      }
+                      style={{
+                        marginLeft: 2,
+                        marginRight: 4,
+                        padding: "0 6px",
+                      }}
+                    >
+                      + a
+                    </button>
+                  )}
                   ==
                   b:
-                  {renderIfElseSlot(block.b, block, parentIdx == null ? idx : parentIdx, "b")}
+                  {block.b !== undefined && block.b !== null ? (
+                    <span
+                      onClick={() =>
+                        handleAddInside(
+                          parentIdx == null ? idx : parentIdx,
+                          "b"
+                        )
+                      }
+                      style={{ cursor: "pointer", marginLeft: 2 }}
+                    >
+                      {renderBlock(
+                        block.b,
+                        1,
+                        parentIdx == null ? idx : parentIdx,
+                        "b"
+                      )}
+                    </span>
+                  ) : (
+                    <button
+                      className="add-inside-btn"
+                      onClick={() =>
+                        handleAddInside(
+                          parentIdx == null ? idx : parentIdx,
+                          "b"
+                        )
+                      }
+                      style={{ marginLeft: 2, padding: "0 6px" }}
+                    >
+                      + b
+                    </button>
+                  )}
                 </span>
                 )
-              </span>
-            )}
-            {/* Operator block custom input UI */}
-            {isOperatorBlock && (
-              <span style={{ marginLeft: 8 }}>
-                {"a" in block && (
-                  <span>
-                    a:
-                    {typeof block.a === "number" ? (
-                      <input
-                        type="number"
-                        style={{ width: 40, marginLeft: 2 }}
-                        value={block.a}
-                        onClick={e => e.stopPropagation()}
-                        onChange={e => handleBlockValueChange(block._id, "a", Number(e.target.value))}
-                      />
-                    ) : (
-                      <button
-                        className="add-inside-btn"
-                        onClick={() =>
-                          handleAddInside(parentIdx == null ? idx : parentIdx, "a")
-                        }
-                        style={{
-                          marginLeft: 2,
-                          padding: "0 6px",
-                        }}
-                      >
-                        + a
-                      </button>
-                    )}
-                  </span>
-                )}
-                {"b" in block && (
-                  <span style={{ marginLeft: 8 }}>
-                    b:
-                    {typeof block.b === "number" ? (
-                      <input
-                        type="number"
-                        style={{ width: 40, marginLeft: 2 }}
-                        value={block.b}
-                        onClick={e => e.stopPropagation()}
-                        onChange={e => handleBlockValueChange(block._id, "b", Number(e.target.value))}
-                      />
-                    ) : (
-                      <button
-                        className="add-inside-btn"
-                        onClick={() =>
-                          handleAddInside(parentIdx == null ? idx : parentIdx, "b")
-                        }
-                        style={{
-                          marginLeft: 2,
-                          padding: "0 6px",
-                        }}
-                      >
-                        + b
-                      </button>
-                    )}
-                  </span>
-                )}
               </span>
             )}
           </span>
@@ -574,6 +481,34 @@ export default function CodingPanel({
                     + else
                   </button>
                 </>
+              )}
+            </>
+          )}
+          {isOperatorBlock && (
+            <>
+              {"a" in block && (
+                <button
+                  className="add-inside-btn"
+                  onClick={() =>
+                    handleAddInside(parentIdx == null ? idx : parentIdx, "a")
+                  }
+                  style={{ marginLeft: 4 }}
+                  title="Add block to slot a"
+                >
+                  + a
+                </button>
+              )}
+              {"b" in block && (
+                <button
+                  className="add-inside-btn"
+                  onClick={() =>
+                    handleAddInside(parentIdx == null ? idx : parentIdx, "b")
+                  }
+                  style={{ marginLeft: 4 }}
+                  title="Add block to slot b"
+                >
+                  + b
+                </button>
               )}
             </>
           )}
@@ -634,7 +569,7 @@ export default function CodingPanel({
             )}
           </div>
         )}
-        {isOperatorBlock && block.a !== undefined && block.a !== null && typeof block.a === "object" && (
+        {isOperatorBlock && block.a !== undefined && block.a !== null && (
           <div
             style={{
               marginLeft: 18,
@@ -650,7 +585,7 @@ export default function CodingPanel({
             )}
           </div>
         )}
-        {isOperatorBlock && block.b !== undefined && block.b !== null && typeof block.b === "object" && (
+        {isOperatorBlock && block.b !== undefined && block.b !== null && (
           <div
             style={{
               marginLeft: 18,
